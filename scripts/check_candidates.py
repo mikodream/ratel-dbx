@@ -19,10 +19,25 @@ import re
 import sys
 import zipfile
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from assert_binary_arch import DETECTORS  # noqa: E402  同目录下的架构探测器
+
 TARGET_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 SHA256_RE = re.compile(r"^[a-fA-F0-9]{64}$")
 # 各 target 包之间必须一致的 manifest 身份字段
 IDENTITY_FIELDS = ("id", "name", "description", "publisher", "version")
+
+# target -> (期望的二进制格式, 期望的 CPU 架构)
+# 迁移到这里是为了让"包名说 x64、内容却是 arm64"这类静默错架构的包
+# 无法通过发布前的汇总校验。
+EXPECTED_BINARY = {
+    "windows-x64": ("pe", "x86_64"),
+    "windows-arm64": ("pe", "arm64"),
+    "linux-x64": ("elf", "x86_64"),
+    "linux-arm64": ("elf", "arm64"),
+    "darwin-x64": ("macho", "x86_64"),
+    "darwin-arm64": ("macho", "arm64"),
+}
 
 
 def read_manifest(package: pathlib.Path) -> dict:
@@ -132,6 +147,25 @@ def main() -> int:
             errors.append(
                 f"{package.name}: executable {executable!r} does not live under bin/{target}/"
             )
+        else:
+            # 断言二进制真实架构：防止"名字是 x64、内容是 arm64"的坏包流向商店
+            expectation = EXPECTED_BINARY.get(target)
+            if expectation is None:
+                errors.append(f"{package.name}: no known binary architecture for target {target!r}")
+            else:
+                expect_format, expect_arch = expectation
+                with zipfile.ZipFile(package) as archive:
+                    binary = archive.read(executable)
+                try:
+                    actual_format, actual_arch = DETECTORS[expect_format](binary)
+                except ValueError as error:
+                    errors.append(f"{package.name}: {executable}: {error}")
+                else:
+                    if actual_format != expect_format or actual_arch != expect_arch:
+                        errors.append(
+                            f"{package.name}: {executable} is {actual_format}/{actual_arch}, "
+                            f"expected {expect_format}/{expect_arch} for target {target!r}"
+                        )
 
         artifacts.append(
             {

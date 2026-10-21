@@ -103,8 +103,10 @@ jobs:
       - name: Install dbx-plugin CLI
         run: npm install --global "@dbx-app/plugin-cli@${PLUGIN_CLI_VERSION}"
 
-      # 跨架构打包（m1 macos-14 上打 darwin-x64）：装 Rosetta 2，把 CLI 换成
-      # 目标架构的二进制，并用 arch -x86_64 调起它，让它自报 build host 为 darwin-x64。
+      # 跨架构打包（macos-14 arm64 上打 darwin-x64）。
+      # dbx-plugin 会校验 build host，所以换成目标架构的原生 CLI，
+      # 用 arch -x86_64 调起，使其自报 build host 即 darwin-x64。
+      # 真正的架构控制靠 package.sh 注入的 GOOS/GOARCH（CLI 内部 go build 会用到）。
       - name: Enable Rosetta for cross-arch packaging
         if: matrix.rosetta == 'true'
         env:
@@ -116,6 +118,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/cli-native"
           tar xzf "dbx-app-plugin-cli-${TARGET}-${PLUGIN_CLI_VERSION}.tgz" -C "$RUNNER_TEMP/cli-native"
           chmod +x "$RUNNER_TEMP/cli-native/package/bin/dbx-plugin"
+          file "$RUNNER_TEMP/cli-native/package/bin/dbx-plugin"
           echo "DBX_PLUGIN_CLI_BINARY=$RUNNER_TEMP/cli-native/package/bin/dbx-plugin" >> "$GITHUB_ENV"
           echo "DBX_PLUGIN_CLI_WRAPPER=arch -x86_64" >> "$GITHUB_ENV"
 
@@ -153,6 +156,9 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Validate candidates and merge release-candidates.json
+        # check_candidates.py 除校验 sha256/size/未签名/executable 位置外，
+        # 还会断言每个包内二进制的真实 CPU 架构与 target 匹配——这道关卡拦住
+        # "包名说 x64、内容却是 arm64" 的静默错架构包（跨架构打包时极易发生）。
         run: |
           python scripts/check_candidates.py dist \
             --expect windows-x64,linux-x64,linux-arm64,darwin-arm64,darwin-x64 \
