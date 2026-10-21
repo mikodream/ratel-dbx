@@ -1,0 +1,153 @@
+name: Release candidate
+
+# 发布一个 GitHub Release 即触发构建：
+#   - 按 5 个 target 分别在该平台 runner 上交叉编译 + 打包（plugin-cli 拒绝跨主机打原生包）
+#   - 校验候选包并把 .dbxp / .artifact.json / release-candidates.json 传到 Release
+#   - 不做任何签名：官方商店由 DBX Store 审核后统一签名
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "已存在的 Release tag（如 v0.1.2）"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  PLUGIN_CLI_VERSION: "0.1.9"
+
+jobs:
+  validate:
+    name: Validate manifest and tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Check manifest structure
+        # bin/ 不入库，此刻还没有二进制，显式允许缺失；package 阶段会再跑一次完整校验
+        run: python scripts/validate_manifest.py manifest.json --allow-missing-binary
+      - name: Check release tag matches manifest version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          python - "$RELEASE_TAG" <<'PY'
+          import json, pathlib, sys
+          version = json.loads(pathlib.Path("manifest.json").read_text(encoding="utf-8"))["version"]
+          expected = f"v{version}"
+          if sys.argv[1] != expected:
+              raise SystemExit(f"release tag {sys.argv[1]!r} does not match manifest version {expected!r}")
+          print(f"tag {sys.argv[1]} matches manifest version {version}")
+          PY
+      - name: Verify Go backend compiles
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: backend/go.sum
+      - run: go vet ./...
+        working-directory: backend
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: validate
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+          - os: macos-14
+            target: darwin-arm64
+          - os: macos-13
+            target: darwin-x64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install dbx-plugin CLI
+        run: npm install --global "@dbx-app/plugin-cli@${PLUGIN_CLI_VERSION}"
+      - name: Package candidate
+        env:
+          TARGET: ${{ matrix.target }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: bash scripts/package.sh "$TARGET"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            dist/*.dbxp
+            dist/*.artifact.json
+
+  publish:
+    name: Publish release assets
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: candidate-*
+          path: dist
+          merge-multiple: true
+      - name: Validate candidates and merge release-candidates.json
+        run: |
+          python scripts/check_candidates.py dist \
+            --expect windows-x64,linux-x64,linux-arm64,darwin-arm64,darwin-x64 \
+            --write-release-candidates dist/release-candidates.json
+      - name: Upload assets to the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          mapfile -d '' packages < <(find dist -type f -name '*.dbxp' -print0)
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "no .dbxp packages were produced" >&2
+            exit 1
+          fi
+          # --clobber 只用于重跑同一 tag 的场景；已发布版本应当递增版本号
+          gh release upload "$RELEASE_TAG" \
+            "${packages[@]}" \
+            dist/*.artifact.json \
+            dist/release-candidates.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber

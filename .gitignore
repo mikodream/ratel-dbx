@@ -2,10 +2,15 @@
 bin/
 dist/
 *.dbxp
+*.artifact.json
 
 # Go build output
 backend/*.exe
 backend/ratel-dbx
+
+# Python
+__pycache__/
+*.pyc
 
 # Local dev
 .env

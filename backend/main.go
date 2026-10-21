@@ -15,7 +15,7 @@ import (
 // 未注入时回落到 defaultPluginVersion，仅供本地裸跑使用。
 var pluginVersion = defaultPluginVersion
 
-const defaultPluginVersion = "0.1.2"
+const defaultPluginVersion = "0.1.3"
 
 func main() {
 	srv := newServer()

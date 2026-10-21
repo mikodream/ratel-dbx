@@ -52,8 +52,14 @@ DBX Host
 ```
 ratel-dbx/
 ├── manifest.json        # DBX 插件契约：id/权限/入口/贡献点
+├── .dbx-store.json      # DBX 官方商店元数据（名称/标签/许可证，非运行时 Manifest）
 ├── dbx-plugin.toml      # 打包配置
-├── build.sh             # 三平台交叉编译 sidecar
+├── build.sh             # 5 个 target 交叉编译 sidecar（本地开发用）
+├── scripts/
+│   ├── package.sh       # 按 target 打未签名候选包（发布用）
+│   ├── validate_manifest.py  # 离线校验 manifest 约束
+│   └── check_candidates.py   # 校验候选包并汇总 release-candidates.json
+├── .github/workflows/release.yml  # 发 Release 自动构建 5 平台候选包
 ├── assets/plugin.svg    # 扑克 A 图标
 ├── ui/                  # 沙箱前端（零构建）
 │   ├── index.html
@@ -64,27 +70,50 @@ ratel-dbx/
 │   ├── main.go          # 入口
 │   ├── rpc.go           # stdio-jsonl JSON-RPC + 事件队列
 │   └── ratel.go         # 复用 core 的 ws/tcp 连接 + 收发包
-└── bin/                 # 构建产物（不提交）
+├── bin/<target>/        # 构建产物（不提交）
+└── dist/                # .dbxp 候选包（不提交）
 ```
 
-## 构建
+## 构建与打包
 
 ```bash
-# 需 Go 1.18+
-cd backend && go mod tidy
-bash build.sh            # 全平台
-# 或只构当前平台
-cd backend && go build -o ../bin/ratel-dbx.exe .   # Windows
+# 需 Go 1.22+
+bash build.sh                 # 构建全部 5 个 target 到 bin/<target>/
+bash build.sh windows         # 只构建 windows-x64
+
+# 打发布候选包（会先交叉编译，再按 target 改写 executable，最后打包）
+bash scripts/package.sh windows-x64
+bash scripts/package.sh linux-x64
 ```
+
+> **target 命名必须用 `{os}-{x64|arm64}`**，对齐 DBX 运行时的 `current_plugin_target()`。
+> 写成 `linux-amd64` 不是合法 target，商店也不认。
+
+## 提交到 DBX 官方商店
+
+1. **递增版本**：改 `manifest.json` 的 `version` 和 `backend/main.go` 的 `defaultPluginVersion`。
+2. **发 Release**：打 tag `v<version>` 并发布 GitHub Release，`.github/workflows/release.yml`
+   会自动在 5 个平台的 runner 上构建候选包，并上传：
+   - `com.dbx.ratel-<version>-<target>.dbxp`（**未签名**）
+   - 对应的 `.artifact.json`
+   - `release-candidates.json`（汇总）
+3. **等待同步**：`t8y2/dbx-store` 的同步 Workflow 读取 `release-candidates.json`，
+   自动创建 `candidates/com.dbx.ratel.json` 候选 PR。
+4. **商店审核签名**：维护者审核后用 DBX Store 仓库密钥签名，回写 `plugins/` 与 `catalog/`，再合并 PR。
+
+**不要自己签名，也不要填写 `signingKeyId`** —— 官方商店插件的签名由 DBX Store 统一完成。
+`.dbx-store.json` 只在首次上架或修改商店文案（名称/标签/许可证）时才需要改。
 
 ## 安装到 DBX
 
-1. **打包**：用 `dbx-plugin package .`（[DBX 插件 CLI](https://dbxio.com/cn/docs/plugin-development)）
-   生成各平台 `.dbxp`。打包器会按目标平台把 `manifest.entrypoints.backend.executable`
-   改写成对应的 `bin/ratel-dbx(.exe)` 或 `bin/ratel-dbx-<os>-<arch>`。
-2. **安装**：开发期可在插件中心开「允许安装未签名开发包」；正式发布走仓库签名 + `.dbxp`。
+1. **开发期**：`bash scripts/package.sh <target>` 出包，插件中心开「允许安装未签名开发包」后直接装。
+2. **正式**：从 DBX 插件商店安装（走官方签名流程）。
 3. **使用**：在 DBX 里点「Ratel 摸鱼台」工作台，填服务器地址（默认 `192.252.182.94:9998`）、
    昵称，点「连接」。摸鱼命令条里点牌型/动作即可发指令，房间和流水自动刷新。
+
+> 打包器**不会**改写 `manifest.entrypoints.backend.executable`：它固定把二进制放到
+> `bin/<target>/` 下，但 manifest 里的路径是字面解析的，所以 `scripts/package.sh` 会在打包前
+> 把该字段改成对应 target 的真实路径，打完再还原。
 
 ## 摸鱼命令速查
 

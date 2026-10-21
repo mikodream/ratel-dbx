@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "id": "com.dbx.ratel",
   "name": "Ratel 摸鱼台",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "dbx-ratel",
   "description": "连接 Ratel 在线棋牌（斗地主/跑得快/德州/大众麻将等）的摸鱼客户端。WebSocket 长连接 + 快捷命令面板。",
   "icon": "assets/plugin.svg",

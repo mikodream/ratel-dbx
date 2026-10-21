@@ -1,0 +1,26 @@
+{
+  "name": "Ratel 摸鱼台",
+  "description": "连接 Ratel 在线棋牌（斗地主 / 跑得快 / 德州 / 大众麻将 / 骗子酒馆）的摸鱼客户端：WebSocket/TCP 长连接、房间列表、按游戏自动切换的命令面板。",
+  "icon": "assets/plugin.svg",
+  "tags": [
+    "game",
+    "websocket",
+    "lan",
+    "workbench"
+  ],
+  "permissions": [
+    "host.events",
+    "host.storage",
+    "host.workbench"
+  ],
+  "source": "https://github.com/mikodream/ratel-dbx",
+  "homepage": "https://github.com/mikodream/ratel-dbx",
+  "license": "MIT",
+  "releaseNotes": "首个公开发布版本：声明 command + menus 贡献点，安装后可从侧边栏、工具栏和命令面板直接打开摸鱼台。",
+  "localizations": {
+    "zh-CN": {
+      "name": "Ratel 摸鱼台",
+      "description": "连接 Ratel 在线棋牌（斗地主 / 跑得快 / 德州 / 大众麻将 / 骗子酒馆）的摸鱼客户端：WebSocket/TCP 长连接、房间列表、按游戏自动切换的命令面板。"
+    }
+  }
+}
