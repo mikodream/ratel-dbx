@@ -7,8 +7,8 @@
   "publisher": "dbx-ratel",
   "description": "连接 Ratel 在线棋牌（斗地主/跑得快/德州/大众麻将等）的摸鱼客户端。WebSocket 长连接 + 快捷命令面板。",
   "icon": "assets/plugin.svg",
-  "source": "https://github.com/ratel-online/client",
-  "homepage": "https://github.com/ratel-online/server",
+  "source": "https://github.com/mikodream/ratel-dbx",
+  "homepage": "https://github.com/mikodream/ratel-dbx",
   "engines": {
     "host_api": "1"
   },
