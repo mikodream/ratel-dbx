@@ -1,8 +1,11 @@
-name: Probe rosetta cli
+name: Probe rosetta fix
 
-# 一次性探针：验证在 macos-14 (arm64) 上能否用 Rosetta 2 运行 darwin-x64 的
-# dbx-plugin 二进制，从而在 arm64 runner 上打出 darwin-x64 的候选包。
-# 验证通过后即可把 release.yml 的 darwin-x64 job 从稀缺的 macos-13 迁到 macos-14。
+# 验证：在 macos-14 (arm64) 上用 Rosetta 打 darwin-x64 候选包。
+#
+# 背景：dbx-plugin package 会自行执行 go build 编译 sidecar，且按「宿主架构」编，
+# 没有跳过开关。因此必须先交叉编译再打包的思路行不通——包里的二进制会被覆盖成 arm64。
+# 本探针验证：用 arch -x86_64 调起 darwin-x64 版 CLI，并注入 GOARCH=amd64 后，
+# 它内部编译出的 sidecar 是否为真正的 x86_64。
 on:
   workflow_dispatch:
 
@@ -20,36 +23,20 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Rosetta status
-        run: |
-          echo "host arch: $(uname -m)"
-          softwareupdate --install-rosetta --agree-to-license || true
-          arch -x86_64 /usr/bin/uname -m
-
-      - name: Fetch darwin-x64 CLI binary from npm
+      - name: Install Rosetta and fetch x64 CLI
         run: |
           set -euo pipefail
+          softwareupdate --install-rosetta --agree-to-license
           npm pack "@dbx-app/plugin-cli-darwin-x64@0.1.9"
-          mkdir -p cli-x64
-          tar xzf dbx-app-plugin-cli-darwin-x64-0.1.9.tgz -C cli-x64
-          chmod +x cli-x64/package/bin/dbx-plugin
-          file cli-x64/package/bin/dbx-plugin
-          # 通过 Rosetta 运行，确认能起来并报告自己认的 host target
-          arch -x86_64 cli-x64/package/bin/dbx-plugin --version
+          mkdir -p "$RUNNER_TEMP/cli-native"
+          tar xzf dbx-app-plugin-cli-darwin-x64-0.1.9.tgz -C "$RUNNER_TEMP/cli-native"
+          chmod +x "$RUNNER_TEMP/cli-native/package/bin/dbx-plugin"
+          file "$RUNNER_TEMP/cli-native/package/bin/dbx-plugin"
+          arch -x86_64 "$RUNNER_TEMP/cli-native/package/bin/dbx-plugin" --version
 
-      - name: Build sidecar for darwin-x64
-        run: |
-          set -euo pipefail
-          VERSION=$(python -c 'import json;print(json.load(open("manifest.json",encoding="utf-8"))["version"])')
-          mkdir -p bin/darwin-x64
-          ( cd backend && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
-              go build -trimpath -ldflags "-s -w -X main.pluginVersion=${VERSION}" \
-              -o ../bin/darwin-x64/ratel-dbx . )
-          file bin/darwin-x64/ratel-dbx
-
-      - name: Package darwin-x64 under Rosetta
+      - name: Package with GOARCH=amd64 injected
         env:
-          DBX_PLUGIN_CLI_BINARY: ${{ github.workspace }}/cli-x64/package/bin/dbx-plugin
+          DBX_PLUGIN_CLI_BINARY: ${{ runner.temp }}/cli-native/package/bin/dbx-plugin
           RELEASE_TAG: v0.1.3
         run: |
           set -euo pipefail
@@ -59,11 +46,27 @@ jobs:
           m["entrypoints"]["backend"]["executable"] = "bin/darwin-x64/ratel-dbx"
           json.dump(m, open("manifest.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
           PY
-          arch -x86_64 cli-x64/package/bin/dbx-plugin package . --target darwin-x64 \
-            --artifact-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/com.dbx.ratel-0.1.3-darwin-x64.dbxp"
+          # 关键：让 CLI 内部的 go build 按 amd64 编译，而不是宿主 arm64
+          export GOOS=darwin GOARCH=amd64 CGO_ENABLED=0
+          arch -x86_64 "$DBX_PLUGIN_CLI_BINARY" package . --target darwin-x64 \
+            --artifact-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/v0.1.3/com.dbx.ratel-0.1.3-darwin-x64.dbxp"
           ls -la dist/
 
-      - name: Verify package contents
+      - name: Assert packaged binary is x86_64
         run: |
           set -euo pipefail
-          python scripts/check_candidates.py dist --expect darwin-x64
+          python - <<'PY'
+          import zipfile, struct
+          pkg = "dist/com.dbx.ratel-0.1.3-darwin-x64.dbxp"
+          with zipfile.ZipFile(pkg) as z:
+              member = [n for n in z.namelist() if n.startswith("bin/")][0]
+              buf = z.read(member)
+          print("member:", member)
+          magic = struct.unpack("<I", buf[:4])[0]
+          assert magic == 0xFEEDFACF, f"not Mach-O 64: {hex(magic)}"
+          cputype = struct.unpack("<i", buf[4:8])[0]
+          arch = {0x01000007: "x86_64", 0x0100000C: "arm64"}.get(cputype, hex(cputype))
+          print("arch =", arch)
+          assert arch == "x86_64", f"expected x86_64, got {arch}"
+          print("PASS: darwin-x64 package contains a real x86_64 binary")
+          PY
