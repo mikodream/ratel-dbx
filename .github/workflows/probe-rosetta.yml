@@ -1,0 +1,69 @@
+name: Probe rosetta cli
+
+# 一次性探针：验证在 macos-14 (arm64) 上能否用 Rosetta 2 运行 darwin-x64 的
+# dbx-plugin 二进制，从而在 arm64 runner 上打出 darwin-x64 的候选包。
+# 验证通过后即可把 release.yml 的 darwin-x64 job 从稀缺的 macos-13 迁到 macos-14。
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Rosetta status
+        run: |
+          echo "host arch: $(uname -m)"
+          softwareupdate --install-rosetta --agree-to-license || true
+          arch -x86_64 /usr/bin/uname -m
+
+      - name: Fetch darwin-x64 CLI binary from npm
+        run: |
+          set -euo pipefail
+          npm pack "@dbx-app/plugin-cli-darwin-x64@0.1.9"
+          mkdir -p cli-x64
+          tar xzf dbx-app-plugin-cli-darwin-x64-0.1.9.tgz -C cli-x64
+          chmod +x cli-x64/package/bin/dbx-plugin
+          file cli-x64/package/bin/dbx-plugin
+          # 通过 Rosetta 运行，确认能起来并报告自己认的 host target
+          arch -x86_64 cli-x64/package/bin/dbx-plugin --version
+
+      - name: Build sidecar for darwin-x64
+        run: |
+          set -euo pipefail
+          VERSION=$(python -c 'import json;print(json.load(open("manifest.json",encoding="utf-8"))["version"])')
+          mkdir -p bin/darwin-x64
+          ( cd backend && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
+              go build -trimpath -ldflags "-s -w -X main.pluginVersion=${VERSION}" \
+              -o ../bin/darwin-x64/ratel-dbx . )
+          file bin/darwin-x64/ratel-dbx
+
+      - name: Package darwin-x64 under Rosetta
+        env:
+          DBX_PLUGIN_CLI_BINARY: ${{ github.workspace }}/cli-x64/package/bin/dbx-plugin
+          RELEASE_TAG: v0.1.3
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          m = json.load(open("manifest.json", encoding="utf-8"))
+          m["entrypoints"]["backend"]["executable"] = "bin/darwin-x64/ratel-dbx"
+          json.dump(m, open("manifest.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          PY
+          arch -x86_64 cli-x64/package/bin/dbx-plugin package . --target darwin-x64 \
+            --artifact-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/com.dbx.ratel-0.1.3-darwin-x64.dbxp"
+          ls -la dist/
+
+      - name: Verify package contents
+        run: |
+          set -euo pipefail
+          python scripts/check_candidates.py dist --expect darwin-x64
