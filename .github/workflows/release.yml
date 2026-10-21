@@ -74,8 +74,14 @@ jobs:
             target: linux-arm64
           - os: macos-14
             target: darwin-arm64
-          - os: macos-13
+          # darwin-x64 不在 macos-13（Intel）上跑：那是 GitHub 最稀缺的 runner，
+          # 排队常常几十分钟甚至无限期，会把整条发布卡死。
+          # 改为在 macos-14 (arm64) 上装 Rosetta 2，用 arch -x86_64 调起
+          # darwin-x64 版 plugin-cli，Go sidecar 则 GOARCH=amd64 交叉编译。
+          # 该方案已在 .github/workflows/probe-rosetta.yml 中验证通过。
+          - os: macos-14
             target: darwin-x64
+            rosetta: "true"
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -96,6 +102,23 @@ jobs:
           python-version: "3.x"
       - name: Install dbx-plugin CLI
         run: npm install --global "@dbx-app/plugin-cli@${PLUGIN_CLI_VERSION}"
+
+      # 跨架构打包（m1 macos-14 上打 darwin-x64）：装 Rosetta 2，把 CLI 换成
+      # 目标架构的二进制，并用 arch -x86_64 调起它，让它自报 build host 为 darwin-x64。
+      - name: Enable Rosetta for cross-arch packaging
+        if: matrix.rosetta == 'true'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          softwareupdate --install-rosetta --agree-to-license
+          npm pack "@dbx-app/plugin-cli-${TARGET}@${PLUGIN_CLI_VERSION}"
+          mkdir -p "$RUNNER_TEMP/cli-native"
+          tar xzf "dbx-app-plugin-cli-${TARGET}-${PLUGIN_CLI_VERSION}.tgz" -C "$RUNNER_TEMP/cli-native"
+          chmod +x "$RUNNER_TEMP/cli-native/package/bin/dbx-plugin"
+          echo "DBX_PLUGIN_CLI_BINARY=$RUNNER_TEMP/cli-native/package/bin/dbx-plugin" >> "$GITHUB_ENV"
+          echo "DBX_PLUGIN_CLI_WRAPPER=arch -x86_64" >> "$GITHUB_ENV"
+
       - name: Package candidate
         env:
           TARGET: ${{ matrix.target }}

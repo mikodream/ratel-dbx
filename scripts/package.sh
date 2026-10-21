@@ -15,8 +15,16 @@
 #      没有任何平台占位符。而 plugin-cli 固定把二进制放到 bin/<target>/ 下，
 #      **且不会改写 manifest**。所以每个 target 必须在打包前把 executable
 #      改写成 bin/<target>/ratel-dbx[.exe]，打完后还原。
-#   3. plugin-cli 拒绝在非目标主机上打原生包
-#      ("does not match build host")，因此 CI 里必须用对应 OS 的 runner。
+#   3. plugin-cli 内部是一个平台原生的 Rust 二进制，它会校验
+#      "Native plugin target 'X' does not match build host 'Y'"，
+#      因此通常必须在同架构的 runner 上打包。
+#
+# 跨架构打包（darwin-x64 on macos-14 arm64）：
+#   plugin-cli 的 Node 包装层支持 DBX_PLUGIN_CLI_BINARY 覆盖二进制路径。
+#   在 Apple Silicon 上装好 Rosetta 2 后，用 `arch -x86_64 <cli>` 调起
+#   darwin-x64 版 CLI，它自报的 build host 就是 darwin-x64，校验即通过；
+#   而 Go sidecar 那边用 GOARCH=amd64 交叉编译产出真正的 x86_64 二进制。
+#   由 DBX_PLUGIN_CLI_WRAPPER 环境变量指定这层包装（见下）。
 #
 # 产物：dist/com.dbx.ratel-<version>-<target>.dbxp + .artifact.json
 set -euo pipefail
@@ -67,7 +75,7 @@ mkdir -p "bin/${TARGET}"
     -o "../${EXE_PATH}" . )
 
 # 3) 校验 manifest 能被 DBX 运行时接受（含二进制存在性检查）
-if [ -x "$ROOT/scripts/validate_manifest.py" ] || [ -f "$ROOT/scripts/validate_manifest.py" ]; then
+if [ -f "$ROOT/scripts/validate_manifest.py" ]; then
   python "$ROOT/scripts/validate_manifest.py" manifest.json
 fi
 
@@ -78,13 +86,23 @@ PKG_NAME="com.dbx.ratel-${VERSION}-${TARGET}.dbxp"
 ARTIFACT_URL="https://github.com/${REPO}/releases/download/${TAG}/${PKG_NAME}"
 
 echo "==> packaging"
-# CI 里是全局安装的 dbx-plugin；本地可能只有 npx 可用
-if command -v dbx-plugin >/dev/null 2>&1; then
-  dbx-plugin package . --target "$TARGET" --artifact-url "$ARTIFACT_URL"
+# 两种调用方式：
+#   a) 常规：dbx-plugin（已装好、架构与宿主一致的 CLI 包装器）
+#   b) 跨架构：DBX_PLUGIN_CLI_BINARY 指向目标架构的原生二进制，
+#      外层套 DBX_PLUGIN_CLI_WRAPPER（如 "arch -x86_64"）改变它自报的 build host。
+#      注意必须直接调原生二进制，不能 arch -x86_64 去跑 node 包装层——
+#      那样 Rosetta 跑的是 node 本身，CLI 仍会按宿主机架构判定。
+WRAPPER="${DBX_PLUGIN_CLI_WRAPPER:-}"
+if [ -n "${DBX_PLUGIN_CLI_BINARY:-}" ]; then
+  CLI=("$DBX_PLUGIN_CLI_BINARY")
+elif command -v dbx-plugin >/dev/null 2>&1; then
+  CLI=(dbx-plugin)
 else
-  npx --yes "@dbx-app/plugin-cli@${PLUGIN_CLI_VERSION:-0.1.9}" package . \
-    --target "$TARGET" --artifact-url "$ARTIFACT_URL"
+  CLI=(npx --yes "@dbx-app/plugin-cli@${PLUGIN_CLI_VERSION:-0.1.9}")
 fi
+
+# shellcheck disable=SC2086
+$WRAPPER "${CLI[@]}" package . --target "$TARGET" --artifact-url "$ARTIFACT_URL"
 
 echo "==> done"
 ls -la dist/*"${TARGET}"* 2>/dev/null || true
