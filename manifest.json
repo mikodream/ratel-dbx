@@ -1,0 +1,144 @@
+{
+  "$schema": "https://raw.githubusercontent.com/t8y2/dbx/main/plugins/manifest.schema.json",
+  "manifest_version": 1,
+  "id": "com.dbx.ratel",
+  "name": "Ratel 摸鱼台",
+  "version": "0.1.2",
+  "publisher": "dbx-ratel",
+  "description": "连接 Ratel 在线棋牌（斗地主/跑得快/德州/大众麻将等）的摸鱼客户端。WebSocket 长连接 + 快捷命令面板。",
+  "icon": "assets/plugin.svg",
+  "source": "https://github.com/ratel-online/client",
+  "homepage": "https://github.com/ratel-online/server",
+  "engines": {
+    "host_api": "1"
+  },
+  "permissions": [
+    "host.events",
+    "host.storage",
+    "host.workbench"
+  ],
+  "entrypoints": {
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    },
+    "backend": {
+      "protocol_versions": [
+        1
+      ],
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x64/ratel-dbx.exe"
+    }
+  },
+  "contributions": [
+    {
+      "type": "workbench",
+      "id": "com.dbx.ratel.main",
+      "label": "Ratel 摸鱼台",
+      "description": "连接 Ratel 在线棋牌，玩斗地主/跑得快/德州/大众麻将。",
+      "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "command",
+      "id": "com.dbx.ratel.open",
+      "label": "Ratel 摸鱼台",
+      "description": "打开 Ratel 棋牌摸鱼台",
+      "icon": "assets/plugin.svg",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "com.dbx.ratel.main",
+        "presentation": "tab",
+        "reuse": "singleton"
+      }
+    },
+    {
+      "type": "menus",
+      "id": "com.dbx.ratel.menus",
+      "items": [
+        {
+          "location": "appToolbar",
+          "command": "com.dbx.ratel.open",
+          "group": "navigation",
+          "order": 0,
+          "default_visible": true
+        },
+        {
+          "location": "appSidebar",
+          "command": "com.dbx.ratel.open",
+          "group": "navigation",
+          "order": 0,
+          "default_visible": true
+        },
+        {
+          "location": "commandPalette",
+          "command": "com.dbx.ratel.open",
+          "group": "navigation",
+          "order": 0
+        }
+      ]
+    },
+    {
+      "type": "connection-provider",
+      "id": "com.dbx.ratel.connection",
+      "label": "Ratel 棋牌",
+      "database_type": "ratel",
+      "description": "Ratel 在线棋牌服务器",
+      "icon": "assets/plugin.svg",
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "名称",
+          "type": "text",
+          "binding": "name",
+          "required": true
+        },
+        {
+          "key": "host",
+          "label": "服务器地址",
+          "type": "text",
+          "binding": "host",
+          "required": true,
+          "placeholder": "ratel.isnico.com 或 192.252.182.94"
+        },
+        {
+          "key": "port",
+          "label": "WS 端口",
+          "type": "number",
+          "binding": "port",
+          "default": 9998
+        },
+        {
+          "key": "protocol",
+          "label": "协议",
+          "type": "radio",
+          "binding": "config",
+          "options": [
+            {
+              "label": "WebSocket (ws://)",
+              "value": "ws"
+            },
+            {
+              "label": "TCP",
+              "value": "tcp"
+            }
+          ],
+          "default": "ws"
+        },
+        {
+          "key": "nickname",
+          "label": "昵称",
+          "type": "text",
+          "binding": "config",
+          "description": "Ratel 的登录名，最长 12 字，会被服务端净化",
+          "placeholder": "张三"
+        }
+      ],
+      "workbench": "com.dbx.ratel.main",
+      "capabilities": [
+        "test",
+        "connect",
+        "disconnect"
+      ]
+    }
+  ]
+}

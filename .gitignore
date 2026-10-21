@@ -1,0 +1,24 @@
+# Binaries (DBX 打包器生成的 sidecar 二进制)
+bin/
+dist/
+*.dbxp
+
+# Go build output
+backend/*.exe
+backend/ratel-dbx
+
+# Local dev
+.env
+*.log
+
+# Signing keys — 私钥绝不入库
+.dbx-repository-signing-key.env
+*.dbx-repository-signing-key.env
+
+# 本地工作记忆（含内部排查记录，不入库）
+.workbuddy/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store

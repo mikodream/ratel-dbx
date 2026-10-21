@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ratel 摸鱼台</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main id="app">
+    <!-- 左侧：连接信息（窄栏） -->
+    <aside class="rail">
+      <div class="rail-brand">
+        <span class="brand-icon">♠</span>
+        <div>
+          <div class="brand-name">Ratel</div>
+          <div class="brand-sub">摸鱼台</div>
+        </div>
+      </div>
+
+      <div class="rail-card">
+        <div class="field">
+          <label>服务器</label>
+          <input id="host" type="text" placeholder="192.252.182.94" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>端口</label>
+            <input id="port" type="number" value="9998" />
+          </div>
+          <div class="field">
+            <label>协议</label>
+            <select id="proto">
+              <option value="ws">WS</option>
+              <option value="tcp">TCP</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>昵称</label>
+          <input id="nick" type="text" placeholder="张三" maxlength="12" />
+        </div>
+      </div>
+
+      <div class="rail-actions">
+        <button id="btnConnect" class="btn primary full">连 接</button>
+        <div class="btn-pair">
+          <button id="btnReconnect" class="btn" disabled>重连</button>
+          <button id="btnDisconnect" class="btn" disabled>断开</button>
+        </div>
+      </div>
+
+      <div class="rail-foot">
+        <span id="status" class="status idle">● 未连接</span>
+      </div>
+    </aside>
+
+    <!-- 右侧：上流水 / 下命令台 -->
+    <section class="pane">
+      <div class="pane-log">
+        <div class="pane-head">
+          <span class="pane-title">推送流水</span>
+          <div class="pane-tools">
+            <span id="logCount" class="muted"></span>
+            <button id="btnClearLog" class="btn ghost sm" type="button">清空</button>
+          </div>
+        </div>
+        <pre id="log" class="log"></pre>
+      </div>
+
+      <div class="deck">
+        <div class="deck-tabs" id="deckTabs"></div>
+        <div class="deck-chips" id="deckChips"></div>
+        <div class="deck-input">
+          <span class="deck-mode" id="cmdMode">全局</span>
+          <input id="cmdInput" type="text" placeholder="输入命令，回车发送" />
+          <button id="btnRefreshRooms" class="btn ghost sm" type="button" title="刷新房间列表">房间</button>
+          <button id="btnSend" class="btn primary sm" type="button">发送</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="./main.js"></script>
+</body>
+</html>

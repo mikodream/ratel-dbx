@@ -1,0 +1,14 @@
+schema_version = 1
+
+[backend]
+language = "go"
+directory = "backend"
+binary = "ratel-dbx"
+
+[package]
+include = ["manifest.json", "ui", "assets", "README.md"]
+
+[dev]
+# Go 项目无前端构建步骤，留空即可
+ui_build = []
+ui_watch = []
