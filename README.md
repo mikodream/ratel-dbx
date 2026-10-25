@@ -23,8 +23,8 @@ DBX 插件前端跑在 opaque-origin iframe 沙箱里，**默认没有任何网�
 ```
 DBX Host
 ┌────────────────────────────────────────────────────────┐
-│  连接表单 (manifest 声明)  │  工作台 (沙箱 iframe ui/)  │
-│  connection-provider       │  index.html + main.js      │
+│  插件入口/菜单 (manifest)  │  工作台 (沙箱 iframe ui/)  │
+│  command + menus           │  index.html + main.js      │
 └──────────────┬─────────────┴───────────────┬───────────┘
                │ lifecycle RPC                │ invoke / notify / onEvent
                ▼                             ▼
@@ -108,12 +108,15 @@ bash scripts/package.sh linux-x64
 
 1. **开发期**：`bash scripts/package.sh <target>` 出包，插件中心开「允许安装未签名开发包」后直接装。
 2. **正式**：从 DBX 插件商店安装（走官方签名流程）。
-3. **使用**：在 DBX 里点「Ratel 摸鱼台」工作台，填服务器地址（默认 `192.252.182.94:9998`）、
-   昵称，点「连接」。摸鱼命令条里点牌型/动作即可发指令，房间和流水自动刷新。
+3. **使用**：在 DBX 里点「Ratel 摸鱼台」工作台，选择「官方服务器」或「自定义服务器」后手动连接。昵称为空时使用 `dbx`，摸鱼命令条里点牌型/动作即可发指令。
 
 > 打包器**不会**改写 `manifest.entrypoints.backend.executable`：它固定把二进制放到
 > `bin/<target>/` 下，但 manifest 里的路径是字面解析的，所以 `scripts/package.sh` 会在打包前
 > 把该字段改成对应 target 的真实路径，打完再还原。
+
+## 网络说明
+
+插件不声明 `host.network` 权限，也不会向固定地址自动出网。`ratel.isnico.com:9998` 只是工作台里的“官方服务器”预设和地址输入框默认值，属于 UI 配置提示，不是插件固定出网地址。只有用户点击“连接”时，Sidecar 才会按当前表单的地址、端口和协议发起连接。
 
 ## 摸鱼命令速查
 
@@ -130,7 +133,7 @@ bash scripts/package.sh linux-x64
 
 ## 注意
 
-- 这是**摸鱼工具**，连接的是你自己的 / 内网 ratel server。默认 `192.252.182.94:9998` 来自
-  ratel 官方 README，实际部署请按你的 server 地址改。
+- 这是**摸鱼工具**，连接的是你选择的官方或自定义 ratel server。官方预设为
+  `ratel.isnico.com:9998`；实际部署也可以切换到自定义地址。
 - Sidecar 是 Go 单二进制，运行零依赖；开发期会 `go mod` 拉 `ratel-online/core` 和
   `gorilla/websocket`，构建后这些被静态编译进二进制。

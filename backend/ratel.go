@@ -24,13 +24,13 @@ type ratelClient struct {
 	conn *network.Conn
 
 	// 当前登录身份（用于断线重连）
-	host    string
-	port    int
-	proto   string // "ws" | "tcp"
+	host     string
+	port     int
+	proto    string // "ws" | "tcp"
 	nickname string
 
 	// 收消息循环退出信号
-	done     atomic.Bool
+	done      atomic.Bool
 	closeOnce sync.Once
 }
 
@@ -38,7 +38,7 @@ type ratelClient struct {
 func (s *server) connectParams(p connParams) (host, proto, nick string, port int) {
 	host = p.Runtime.Host
 	if host == "" {
-		host = "192.252.182.94"
+		host = "ratel.isnico.com"
 	}
 	port = p.Runtime.Port
 	if port == 0 {

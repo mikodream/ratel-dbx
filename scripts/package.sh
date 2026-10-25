@@ -53,7 +53,7 @@ esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-VERSION="$(python -c 'import json;print(json.load(open("manifest.json",encoding="utf-8"))["version"])')"
+VERSION="$(python3 -c 'import json;print(json.load(open("manifest.json",encoding="utf-8"))["version"])')"
 EXE_PATH="bin/${TARGET}/${BIN_NAME}"
 MANIFEST_BAK="$(mktemp)"
 cp manifest.json "$MANIFEST_BAK"
@@ -64,7 +64,7 @@ trap restore EXIT
 echo "==> target=$TARGET version=$VERSION executable=$EXE_PATH (${GOOS}/${GOARCH})"
 
 # 1) 把 executable 指向本次 target 的真实位置
-python - "$EXE_PATH" <<'PY'
+python3 - "$EXE_PATH" <<'PY'
 import json, sys
 path = sys.argv[1]
 with open("manifest.json", encoding="utf-8") as fh:
@@ -77,7 +77,7 @@ PY
 
 # 2) 校验 manifest 结构（此阶段二进制还没生成，允许缺失）
 if [ -f "$ROOT/scripts/validate_manifest.py" ]; then
-  python "$ROOT/scripts/validate_manifest.py" manifest.json --allow-missing-binary
+  python3 "$ROOT/scripts/validate_manifest.py" manifest.json --allow-missing-binary
 fi
 
 # 3) 打包。CLI 会按下面的 GOOS/GOARCH 自行编译 sidecar。
@@ -105,7 +105,7 @@ $WRAPPER "${CLI[@]}" package . --target "$TARGET" --artifact-url "$ARTIFACT_URL"
 
 # 4) 断言包内二进制的真实架构
 echo "==> asserting packaged binary architecture"
-python "$ROOT/scripts/assert_binary_arch.py" "dist/${PKG_NAME}" --expect-arch "$EXPECT_ARCH" --expect-format "$PKG_FMT"
+python3 "$ROOT/scripts/assert_binary_arch.py" "dist/${PKG_NAME}" --expect-arch "$EXPECT_ARCH" --expect-format "$PKG_FMT"
 
 echo "==> done"
 ls -la dist/*"${TARGET}"* 2>/dev/null || true

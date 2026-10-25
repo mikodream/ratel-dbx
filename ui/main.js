@@ -94,6 +94,9 @@
     }
   }
 
+  var OFFICIAL_SERVER_HOST = "ratel.isnico.com";
+  var OFFICIAL_SERVER_PORT = 9998;
+
   var state = {
     connected: false,
     activeTab: "global",   // 当前显示的页签
@@ -111,6 +114,7 @@
     btnRefresh: document.getElementById("btnRefreshRooms"),
     btnSend: document.getElementById("btnSend"),
     btnClearLog: document.getElementById("btnClearLog"),
+    serverPreset: document.getElementById("serverPreset"),
     host: document.getElementById("host"),
     port: document.getElementById("port"),
     nick: document.getElementById("nick"),
@@ -124,12 +128,36 @@
   };
 
   // ---- 主题 ----
-  function applyTheme() {
-    var appearance = "dark";
+  function applyTheme(theme) {
+    var appearance = "";
     try {
-      appearance = (dbx.theme && dbx.theme.appearance) || "dark";
+      var currentTheme = theme || dbx.theme;
+      if (typeof currentTheme === "string") appearance = currentTheme;
+      else appearance = (currentTheme && currentTheme.appearance) || "";
+      // DBX 也会把当前主题写到插件根节点，作为没有完整事件负载时的兜底。
+      if (!appearance) appearance = document.documentElement.getAttribute("data-dbx-theme") || "";
     } catch (e) { /* 开发态 */ }
+    // 只接受 DBX 文档约定的值，避免异常事件把样式切到未知主题。
+    if (appearance !== "light" && appearance !== "dark") appearance = "dark";
     document.documentElement.setAttribute("data-appearance", appearance);
+  }
+
+  // DBX 在切换主题时通过环境事件推送新的 theme；不能只在打开工作台时读取一次。
+  function onDbxEnvironment(event) {
+    var payload = event && (event.detail || event.data) || {};
+    // 兼容 { theme }、{ data: { theme } }、直接 theme 对象等桥接负载。
+    var theme = payload.theme || (payload.data && payload.data.theme) ||
+      (payload.value && payload.value.theme) || payload;
+    applyTheme(theme);
+  }
+
+  window.addEventListener("dbx-plugin-env", onDbxEnvironment);
+  // 主题 token/属性由宿主直接注入根节点，监听它可覆盖旧版或异常事件桥。
+  if (window.MutationObserver) {
+    new MutationObserver(function () { applyTheme(); }).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-dbx-theme"]
+    });
   }
 
   function ts() {
@@ -172,11 +200,20 @@
   }
 
   // ---- 连接参数 ----
+  function syncServerPreset() {
+    var official = el.serverPreset.value === "official";
+    el.host.readOnly = official;
+    if (official) {
+      el.host.value = OFFICIAL_SERVER_HOST;
+      el.port.value = String(OFFICIAL_SERVER_PORT);
+    }
+  }
+
   function toRpcParams() {
     return {
       runtime: {
-        host: (el.host.value || "").trim() || "192.252.182.94",
-        port: parseInt(el.port.value, 10) || 9998
+        host: (el.host.value || "").trim() || OFFICIAL_SERVER_HOST,
+        port: parseInt(el.port.value, 10) || OFFICIAL_SERVER_PORT
       },
       external_config: {
         protocol: el.proto.value || "ws",
@@ -348,6 +385,7 @@
   }
 
   function bindEvents() {
+    el.serverPreset.addEventListener("change", syncServerPreset);
     el.btnConnect.addEventListener("click", doConnect);
     el.btnDisconnect.addEventListener("click", doDisconnect);
     el.btnReconnect.addEventListener("click", doReconnect);
@@ -364,6 +402,7 @@
 
   function init() {
     applyTheme();
+    syncServerPreset();
     renderTabs();
     renderChips();
     bindEvents();

@@ -20,12 +20,19 @@
 
       <div class="rail-card">
         <div class="field">
-          <label>服务器</label>
-          <input id="host" type="text" placeholder="192.252.182.94" />
+          <label for="serverPreset">服务器</label>
+          <select id="serverPreset">
+            <option value="official">官方服务器（ratel.isnico.com）</option>
+            <option value="custom">自定义服务器</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="host">地址</label>
+          <input id="host" type="text" value="ratel.isnico.com" placeholder="输入自定义服务器地址" readonly />
         </div>
         <div class="field-row">
           <div class="field">
-            <label>端口</label>
+            <label for="port">端口</label>
             <input id="port" type="number" value="9998" />
           </div>
           <div class="field">
@@ -38,7 +45,7 @@
         </div>
         <div class="field">
           <label>昵称</label>
-          <input id="nick" type="text" placeholder="张三" maxlength="12" />
+          <input id="nick" type="text" placeholder="dbx" maxlength="12" />
         </div>
       </div>
 

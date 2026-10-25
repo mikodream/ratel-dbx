@@ -44,19 +44,19 @@ type rpcNotification struct {
 
 // Event 是发给前端 onEvent 的结构：method + payload。
 type Event struct {
-	Method string
+	Method  string
 	Payload any
 }
 
 // server 维护 sidecar 生命周期、连接句柄与 stdout 写锁（stdio-jsonl 必须串行写）。
 type server struct {
-	outMu    sync.Mutex
-	events   chan Event // 发给前端的事件队列（消费循环 flush 到 stdout）
+	outMu  sync.Mutex
+	events chan Event // 发给前端的事件队列（消费循环 flush 到 stdout）
 
 	// 连接状态（ratelClient 管理）
-	mu        sync.Mutex
-	client    *ratelClient
-	connected bool
+	mu            sync.Mutex
+	client        *ratelClient
+	connected     bool
 	roomListCache []coremodel.Room
 
 	lastRuntime runtime
@@ -218,14 +218,14 @@ func errResp(id interface{}, code int, msg string) *rpcResponse {
 	return &rpcResponse{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: code, Message: msg}}
 }
 
-// ---- 连接参数（与 manifest 的 connection-provider fields 对应）----
+// ---- 连接参数 ----
 
 type connParams struct {
-	Provider       string   `json:"provider"`
-	Connection     string   `json:"connection"`
-	Runtime        runtime  `json:"runtime"`
-	ExternalConfig extConf  `json:"external_config"`
-	Secrets        secrets  `json:"secrets"`
+	Provider       string  `json:"provider"`
+	Connection     string  `json:"connection"`
+	Runtime        runtime `json:"runtime"`
+	ExternalConfig extConf `json:"external_config"`
+	Secrets        secrets `json:"secrets"`
 }
 
 type runtime struct {

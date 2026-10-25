@@ -1,6 +1,8 @@
 // DBX 插件 Sidecar 入口。
 // 构建：
-//   go build -o ../bin/ratel-dbx .
+//
+//	go build -o ../bin/ratel-dbx .
+//
 // 产物为单二进制，DBX 按 manifest 的 entrypoints.backend.executable 启动。
 package main
 
@@ -15,7 +17,7 @@ import (
 // 未注入时回落到 defaultPluginVersion，仅供本地裸跑使用。
 var pluginVersion = defaultPluginVersion
 
-const defaultPluginVersion = "0.1.3"
+const defaultPluginVersion = "0.1.4"
 
 func main() {
 	srv := newServer()
